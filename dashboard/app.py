@@ -1,10 +1,5 @@
-
-# From shiny, import just reactive and render
 from shiny import reactive, render
-
-# From shiny.express, import just ui and inputs if needed
 from shiny.express import ui, input
-
 import random
 from datetime import datetime
 from collections import deque
@@ -101,13 +96,13 @@ with ui.sidebar(open="open"):
 
     ui.h2("Antarctic Explorer", class_="text-center"),
     ui.p("A demonstration of real-time temperature readings in Antarctica.", class_="text-center",),
-    ui.input_select("time", "Historical Time Interval", ["1 Year", "5 years", "25 Years", "50 Years"], selected="5 Years"),
+    ui.input_select("time", "Historical Time Interval", ["1 Year", "5 years", "25 Years", "50 Years"], selected="25 Years"),
     ui.hr(),
     ui.h6("Links:"),
-    ui.a("GitHub Source", href="https://github.com/denisecase/cintel-05-cintel", target="_blank",),
+    ui.a("GitHub Source", href="https://github.com/drpafowler/cintel-05-cintel/tree/main", target="_blank",),
     ui.a("GitHub App", href="https://denisecase.github.io/cintel-05-cintel/", target="_blank")
     ui.a("PyShiny", href="https://shiny.posit.co/py/", target="_blank")
-    ui.a("PyShiny Express", href="hhttps://shiny.posit.co/blog/posts/shiny-express/", target="_blank",)
+    ui.a("Palmer Station Historical Data", href="https://portal.edirepository.org/nis/mapbrowse?scope=knb-lter-pal&identifier=189", target="_blank",)
 
 # In Shiny Express, everything not in the sidebar is in the main panel
 
@@ -122,7 +117,17 @@ with ui.layout_columns():
             deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
             return f"{latest_dictionary_entry['temp']} C"
 
-        "warmer than usual"
+        @render.text
+        def display_temp_status():
+            """Get the latest reading and return a status string"""
+            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+            temp = latest_dictionary_entry['temp']
+            if temp > 0:
+                return "Warmer than Usual"
+            elif temp > -15:
+                return "Average Temperatures"
+            else:
+                return "Colder than Usual"
 
   
 
