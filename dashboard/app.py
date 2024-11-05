@@ -38,7 +38,7 @@ WEATHER_UPDATE_INTERVAL_SECS: int = 900  # 15 minutes in seconds
 def update_weather():
     # Invalidate this effect every WEATHER_UPDATE_INTERVAL_SECS
     reactive.invalidate_later(WEATHER_UPDATE_INTERVAL_SECS)
-    
+
 # Setup the Open-Meteo API client with cache and retry on error
 cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
 retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
@@ -156,7 +156,7 @@ with ui.sidebar(open="open"):
     ui.hr(),
     ui.h6("Links:"),
     ui.a("GitHub Source", href="https://github.com/drpafowler/cintel-05-cintel/tree/main", target="_blank",),
-    ui.a("GitHub App", href="https://denisecase.github.io/cintel-05-cintel/", target="_blank")
+    ui.a("GitHub App", href="https://drpafowler.github.io/cintel-05-cintel/", target="_blank")
     ui.a("OpenMeteo API", href="https://open-meteo.com/", target="_blank")
     ui.a("Palmer Station Historical Data", href="https://portal.edirepository.org/nis/mapbrowse?scope=knb-lter-pal&identifier=189", target="_blank",)
 
@@ -179,8 +179,12 @@ with ui.layout_columns():
         @render.text
         def display_temp_status():
             """Get the latest reading and return a status string"""
-            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
-            temp = latest_dictionary_entry['temp']
+            if input.source() == "OpenMeteo API":
+                temp = current_temperature_2m
+            else:
+                deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+                temp = latest_dictionary_entry['temp']
+            
             if temp > 0:
                 return "Warmer than Usual"
             elif temp > -15:
