@@ -8,9 +8,9 @@ import plotly.express as px
 from shinywidgets import render_plotly
 from scipy import stats
 from faicons import icon_svg
-import openmeteo_requests
-import requests_cache
-from retry_requests import retry
+#import openmeteo_requests
+#import requests_cache
+#from retry_requests import retry
 
 UPDATE_INTERVAL_SECS: int = 3
 
@@ -30,55 +30,55 @@ historical_df = pd.read_csv(historical_data_path)
 historical_df['Date'] = pd.to_datetime(historical_df['Date'])
 
 # Collect the Live Data
-
+# Currently commented out as I was unable to get this to work with Shiny Live
 # Set update interval for live weather data
-WEATHER_UPDATE_INTERVAL_SECS: int = 900  # 15 minutes in seconds
+#WEATHER_UPDATE_INTERVAL_SECS: int = 900  # 15 minutes in seconds
 
-@reactive.effect
-def update_weather():
+#@reactive.effect
+#def update_weather():
     # Invalidate this effect every WEATHER_UPDATE_INTERVAL_SECS
-    reactive.invalidate_later(WEATHER_UPDATE_INTERVAL_SECS)
+    #reactive.invalidate_later(WEATHER_UPDATE_INTERVAL_SECS)
 
 # Setup the Open-Meteo API client with cache and retry on error
-cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
-retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-openmeteo = openmeteo_requests.Client(session = retry_session)
+#cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
+#retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+#openmeteo = openmeteo_requests.Client(session = retry_session)
 
 # Make sure all required weather variables are listed here
 # The order of variables in hourly or daily is important to assign them correctly below
-url = "https://api.open-meteo.com/v1/forecast"
-params = {
-    "latitude": -77.846,
-    "longitude": 166.676,
-    "minutely_15": "temperature_2m",
-    "current": "temperature_2m",
-    "timezone": "GMT",
-    "past_minutely_15": 24,
-    "forecast_days": 1
-}
-responses = openmeteo.weather_api(url, params=params)
+#url = "https://api.open-meteo.com/v1/forecast"
+#params = {
+ #   "latitude": -77.846,
+#    "longitude": 166.676,
+#    "minutely_15": "temperature_2m",
+#    "current": "temperature_2m",
+#    "timezone": "GMT",
+#    "past_minutely_15": 24,
+#    "forecast_days": 1
+#}
+#responses = openmeteo.weather_api(url, params=params)
 
 # Process first location. Add a for-loop for multiple locations or weather models
-response = responses[0]
+#response = responses[0]
 
 
 # Current values. The order of variables needs to be the same as requested.
-current = response.Current()
-current_temperature_2m = current.Variables(0).Value()
+#current = response.Current()
+#current_temperature_2m = current.Variables(0).Value()
 
 # Process minutely_15 data. The order of variables needs to be the same as requested.
-minutely_15 = response.Minutely15()
-minutely_15_temperature_2m = minutely_15.Variables(0).ValuesAsNumpy()
+#minutely_15 = response.Minutely15()
+#minutely_15_temperature_2m = minutely_15.Variables(0).ValuesAsNumpy()
 
-minutely_15_data = {"date": pd.date_range(
-	start = pd.to_datetime(minutely_15.Time(), unit = "s", utc = True),
-	end = pd.to_datetime(minutely_15.TimeEnd(), unit = "s", utc = True),
-	freq = pd.Timedelta(seconds = minutely_15.Interval()),
-	inclusive = "left"
-)}
-minutely_15_data["temperature_2m"] = minutely_15_temperature_2m
+#minutely_15_data = {"date": pd.date_range(
+#	start = pd.to_datetime(minutely_15.Time(), unit = "s", utc = True),
+#	end = pd.to_datetime(minutely_15.TimeEnd(), unit = "s", utc = True),
+#	freq = pd.Timedelta(seconds = minutely_15.Interval()),
+#	inclusive = "left"
+#)}
+#minutely_15_data["temperature_2m"] = minutely_15_temperature_2m
 
-minutely_15_dataframe = pd.DataFrame(data = minutely_15_data)
+#minutely_15_dataframe = pd.DataFrame(data = minutely_15_data)
 
 
 # Define the reactive calculation
@@ -150,8 +150,8 @@ with ui.sidebar(open="open"):
 
     ui.h2("Antarctic Explorer", class_="text-center"),
     ui.p("A demonstration of real-time temperature readings in Antarctica.", class_="text-center",),
-    ui.input_select("source", "Live Data Source", ["OpenMeteo API", "Random"], selected="OpenMeteo API"),
-    ui.input_select("data", "Data Table Source", ["OpenMeteo API", "Random", "Historical Data"], selected="OpenMeteo API"),
+#    ui.input_select("source", "Live Data Source", ["OpenMeteo API", "Random"], selected="OpenMeteo API"),
+    ui.input_select("data", "Data Table Source", ["Random", "Historical Data"], selected="OpenMeteo API"),
     ui.input_select("time", "Historical Time Interval", ["1 Year", "5 years", "25 Years", "50 Years"], selected="25 Years"),
     ui.hr(),
     ui.h6("Links:"),
@@ -170,26 +170,20 @@ with ui.layout_columns():
         @render.text
         def display_temp():
             """Get the latest reading and return a temperature string"""
-            if input.source() == "OpenMeteo API":
-                return f"{current_temperature_2m:.1f} C"
-
-            else:
-                deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
-                return f"{latest_dictionary_entry['temp']} C"
+            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+            return f"{latest_dictionary_entry['temp']} C"
 
         @render.text
         def display_temp_status():
             """Get the latest reading and return a status string"""
-            if input.source() == "OpenMeteo API":
-                temp = current_temperature_2m
-            else:
-                deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
-                temp = latest_dictionary_entry['temp']
+
+            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+            temp = latest_dictionary_entry['temp']
             
             if temp > 0:
                 return "Warmer than Usual"
             elif temp > -15:
-                return "Average Temperatures"
+                return "Typical temperature"
             else:
                 return "Colder than Usual"
 
@@ -215,30 +209,22 @@ with ui.card(full_screen=True):
     @render.data_frame
     def display_df():
         """Get the latest reading and return a dataframe with current readings"""
-        if input.data() == "OpenMeteo API":
-            return render.DataGrid(minutely_15_dataframe, width="100%")
-        elif input.data() == "Random":
+        if input.data() == "Random":
             deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
             pd.set_option('display.width', None)
             return render.DataGrid(df, width="100%")
         else:  # Historical Data
-            return render.DataGrid(filtered_historical_df(), width="100%")
+            filtered_df = filtered_historical_df()[["Year", "Month", "Mean Temperature (C)"]]
+            return render.DataGrid(filtered_df, width="100%")
+
+
 
 with ui.card():
     ui.card_header("Live Data")
 
     @render_plotly
     def display_plot():
-        if input.source() == "OpenMeteo API":
-            # Create scatter plot for OpenMeteo data
-            fig = px.scatter(minutely_15_dataframe,
-                x="date", 
-                y="temperature_2m",
-                title="OpenMeteo Temperature Readings",
-                labels={"temperature_2m": "Temperature (°C)", "date": "Time"},
-                color_discrete_sequence=["blue"])
-            return fig
-        else:
+
             # Fetch from the reactive calc function for random data
             deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
 
