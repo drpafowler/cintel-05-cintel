@@ -1,0 +1,10 @@
+faicons
+shiny
+pandas
+pyarrow
+scipy
+shinylive
+shinywidgets
+matplotlib
+seaborn
+plotly
