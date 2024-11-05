@@ -171,7 +171,8 @@ with ui.layout_columns():
         def display_temp():
             """Get the latest reading and return a temperature string"""
             if input.source() == "OpenMeteo API":
-                return f"{current_temperature_2m} C"
+                return f"{current_temperature_2m:.1f} C"
+
             else:
                 deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
                 return f"{latest_dictionary_entry['temp']} C"
