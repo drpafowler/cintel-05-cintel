@@ -8,7 +8,9 @@ import plotly.express as px
 from shinywidgets import render_plotly
 from scipy import stats
 from faicons import icon_svg
-
+import openmeteo_requests
+import requests_cache
+from retry_requests import retry
 
 UPDATE_INTERVAL_SECS: int = 3
 
@@ -26,6 +28,58 @@ reactive_value_wrapper = reactive.value(deque(maxlen=DEQUE_SIZE))
 historical_data_path = "data/PalmerStation_Monthly_Weather_Clean.csv"
 historical_df = pd.read_csv(historical_data_path)
 historical_df['Date'] = pd.to_datetime(historical_df['Date'])
+
+# Collect the Live Data
+
+# Set update interval for live weather data
+WEATHER_UPDATE_INTERVAL_SECS: int = 900  # 15 minutes in seconds
+
+@reactive.effect
+def update_weather():
+    # Invalidate this effect every WEATHER_UPDATE_INTERVAL_SECS
+    reactive.invalidate_later(WEATHER_UPDATE_INTERVAL_SECS)
+    
+# Setup the Open-Meteo API client with cache and retry on error
+cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
+retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+openmeteo = openmeteo_requests.Client(session = retry_session)
+
+# Make sure all required weather variables are listed here
+# The order of variables in hourly or daily is important to assign them correctly below
+url = "https://api.open-meteo.com/v1/forecast"
+params = {
+    "latitude": -77.846,
+    "longitude": 166.676,
+    "minutely_15": "temperature_2m",
+    "current": "temperature_2m",
+    "timezone": "GMT",
+    "past_minutely_15": 24,
+    "forecast_days": 1
+}
+responses = openmeteo.weather_api(url, params=params)
+
+# Process first location. Add a for-loop for multiple locations or weather models
+response = responses[0]
+
+
+# Current values. The order of variables needs to be the same as requested.
+current = response.Current()
+current_temperature_2m = current.Variables(0).Value()
+
+# Process minutely_15 data. The order of variables needs to be the same as requested.
+minutely_15 = response.Minutely15()
+minutely_15_temperature_2m = minutely_15.Variables(0).ValuesAsNumpy()
+
+minutely_15_data = {"date": pd.date_range(
+	start = pd.to_datetime(minutely_15.Time(), unit = "s", utc = True),
+	end = pd.to_datetime(minutely_15.TimeEnd(), unit = "s", utc = True),
+	freq = pd.Timedelta(seconds = minutely_15.Interval()),
+	inclusive = "left"
+)}
+minutely_15_data["temperature_2m"] = minutely_15_temperature_2m
+
+minutely_15_dataframe = pd.DataFrame(data = minutely_15_data)
+
 
 # Define the reactive calculation
 @reactive.calc()
@@ -96,12 +150,14 @@ with ui.sidebar(open="open"):
 
     ui.h2("Antarctic Explorer", class_="text-center"),
     ui.p("A demonstration of real-time temperature readings in Antarctica.", class_="text-center",),
+    ui.input_select("source", "Live Data Source", ["OpenMeteo API", "Random"], selected="OpenMeteo API"),
+    ui.input_select("data", "Data Table Source", ["OpenMeteo API", "Random", "Historical Data"], selected="OpenMeteo API"),
     ui.input_select("time", "Historical Time Interval", ["1 Year", "5 years", "25 Years", "50 Years"], selected="25 Years"),
     ui.hr(),
     ui.h6("Links:"),
     ui.a("GitHub Source", href="https://github.com/drpafowler/cintel-05-cintel/tree/main", target="_blank",),
     ui.a("GitHub App", href="https://denisecase.github.io/cintel-05-cintel/", target="_blank")
-    ui.a("PyShiny", href="https://shiny.posit.co/py/", target="_blank")
+    ui.a("OpenMeteo API", href="https://open-meteo.com/", target="_blank")
     ui.a("Palmer Station Historical Data", href="https://portal.edirepository.org/nis/mapbrowse?scope=knb-lter-pal&identifier=189", target="_blank",)
 
 # In Shiny Express, everything not in the sidebar is in the main panel
@@ -114,8 +170,11 @@ with ui.layout_columns():
         @render.text
         def display_temp():
             """Get the latest reading and return a temperature string"""
-            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
-            return f"{latest_dictionary_entry['temp']} C"
+            if input.source() == "OpenMeteo API":
+                return f"{current_temperature_2m} C"
+            else:
+                deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+                return f"{latest_dictionary_entry['temp']} C"
 
         @render.text
         def display_temp_status():
@@ -151,58 +210,65 @@ with ui.card(full_screen=True):
     @render.data_frame
     def display_df():
         """Get the latest reading and return a dataframe with current readings"""
-        deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
-        pd.set_option('display.width', None)        # Use maximum width
-        return render.DataGrid( df,width="100%")
+        if input.data() == "OpenMeteo API":
+            return render.DataGrid(minutely_15_dataframe, width="100%")
+        elif input.data() == "Random":
+            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
+            pd.set_option('display.width', None)
+            return render.DataGrid(df, width="100%")
+        else:  # Historical Data
+            return render.DataGrid(filtered_historical_df(), width="100%")
 
 with ui.card():
-    ui.card_header("Chart with Current Trend")
+    ui.card_header("Live Data")
 
     @render_plotly
     def display_plot():
-        # Fetch from the reactive calc function
-        deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
-
-        # Ensure the DataFrame is not empty before plotting
-        if not df.empty:
-            # Convert the 'timestamp' column to datetime for better plotting
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-            # Create scatter plot for readings
-            # pass in the df, the name of the x column, the name of the y column,
-            # and more
-        
-            fig = px.scatter(df,
-            x="timestamp",
-            y="temp",
-            title="Temperature Readings with Regression Line",
-            labels={"temp": "Temperature (°C)", "timestamp": "Time"},
-            color_discrete_sequence=["blue"] )
-            
-            # Linear regression - we need to get a list of the
-            # Independent variable x values (time) and the
-            # Dependent variable y values (temp)
-            # then, it's pretty easy using scipy.stats.linregress()
-
-            # For x let's generate a sequence of integers from 0 to len(df)
-            sequence = range(len(df))
-            x_vals = list(sequence)
-            y_vals = df["temp"]
-
-            slope, intercept, r_value, p_value, std_err = stats.linregress(x_vals, y_vals)
-            df['best_fit_line'] = [slope * x + intercept for x in x_vals]
-
-            # Add the regression line to the figure
-            fig.add_scatter(x=df["timestamp"], y=df['best_fit_line'], mode='lines', name='Regression Line')
-
-            # Update layout as needed to customize further
-            fig.update_layout(xaxis_title="Time", yaxis_title="Temperature (°C)")
+        if input.source() == "OpenMeteo API":
+            # Create scatter plot for OpenMeteo data
+            fig = px.scatter(minutely_15_dataframe,
+                x="date", 
+                y="temperature_2m",
+                title="OpenMeteo Temperature Readings",
+                labels={"temperature_2m": "Temperature (°C)", "date": "Time"},
+                color_discrete_sequence=["blue"])
             return fig
+        else:
+            # Fetch from the reactive calc function for random data
+            deque_snapshot, df, latest_dictionary_entry = reactive_calc_combined()
 
-        return fig
+            # Ensure the DataFrame is not empty before plotting
+            if not df.empty:
+                # Convert the 'timestamp' column to datetime for better plotting
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+                # Create scatter plot for readings
+                fig = px.scatter(df,
+                    x="timestamp",
+                    y="temp",
+                    title="Temperature Readings with Regression Line",
+                    labels={"temp": "Temperature (°C)", "timestamp": "Time"},
+                    color_discrete_sequence=["blue"])
+                
+                # Linear regression
+                sequence = range(len(df))
+                x_vals = list(sequence)
+                y_vals = df["temp"]
+
+                slope, intercept, r_value, p_value, std_err = stats.linregress(x_vals, y_vals)
+                df['best_fit_line'] = [slope * x + intercept for x in x_vals]
+
+                # Add the regression line to the figure
+                fig.add_scatter(x=df["timestamp"], y=df['best_fit_line'], mode='lines', name='Regression Line')
+
+                # Update layout
+                fig.update_layout(xaxis_title="Time", yaxis_title="Temperature (°C)")
+                return fig
+
+            return px.scatter()  # Return empty plot if df is empty
 
 with ui.card():
-    ui.card_header("Chart with 50 Year Historical Trend")   
+    ui.card_header("Historical Data")   
 
     @render_plotly
     def display_historical_plot():
