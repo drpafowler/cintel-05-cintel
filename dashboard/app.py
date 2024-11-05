@@ -3,6 +3,7 @@ from shiny.express import ui, input
 import random
 from datetime import datetime
 from collections import deque
+import os
 import pandas as pd
 import plotly.express as px
 from shinywidgets import render_plotly
@@ -25,7 +26,8 @@ DEQUE_SIZE: int = 50
 reactive_value_wrapper = reactive.value(deque(maxlen=DEQUE_SIZE))
 
 # Load the historical data from data folder
-historical_data_path = "data/PalmerStation_Monthly_Weather_Clean.csv"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+historical_data_path = os.path.join(current_dir, "PalmerStation_Monthly_Weather_Clean.csv")
 historical_df = pd.read_csv(historical_data_path)
 historical_df['Date'] = pd.to_datetime(historical_df['Date'])
 
