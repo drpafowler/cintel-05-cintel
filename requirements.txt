@@ -9,5 +9,5 @@ matplotlib
 seaborn
 plotly
 openmeteo-requests
-requests_cache
-retry_requests
+requests-cache
+retry-requests
