@@ -8,6 +8,3 @@ shinywidgets
 matplotlib
 seaborn
 plotly
-#openmeteo-requests
-#requests-cache
-#retry-requests
