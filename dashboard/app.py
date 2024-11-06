@@ -9,8 +9,8 @@ import plotly.express as px
 from shinywidgets import render_plotly
 from scipy import stats
 from faicons import icon_svg
-from astral import LocationInfo
-from astral.sun import sun
+from suntime import Sun, SunTimeException
+
 
 #import openmeteo_requests
 #import requests_cache
@@ -212,9 +212,8 @@ with ui.layout_columns():
         @render.text
         def display_sunrise():
             """Calculate and return the sunrise time for Palmer Station, Antarctica"""
-            city = LocationInfo("Palmer Station", "Antarctica", "Antarctica/Palmer", -64.77, -64.05)
-            s = sun(city.observer, date=datetime.now())
-            sunrise_time = s['sunrise']
+            sun = Sun(-64.77, -64.05)
+            sunrise_time = sun.get_local_sunrise_time()
             # Adjust for Palmer Station timezone (UTC-3)
             palmer_sunrise_time = sunrise_time.replace(hour=(sunrise_time.hour - 3) % 24)
             return palmer_sunrise_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -223,9 +222,8 @@ with ui.layout_columns():
         @render.text
         def display_sunset():
             """Calculate and return the sunset time for Palmer Station, Antarctica"""
-            city = LocationInfo("Palmer Station", "Antarctica", "Antarctica/Palmer", -64.77, -64.05)
-            s = sun(city.observer, date=datetime.now())
-            sunset_time = s['sunset']
+            sun = Sun(-64.77, -64.05)
+            sunset_time = sun.get_local_sunset_time()
             # Adjust for Palmer Station timezone (UTC-3)
             palmer_sunset_time = sunset_time.replace(hour=(sunset_time.hour - 3) % 24)
             return palmer_sunset_time.strftime("%Y-%m-%d %H:%M:%S")

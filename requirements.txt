@@ -8,4 +8,4 @@ shinywidgets
 matplotlib
 seaborn
 plotly
-astral
+suntime
