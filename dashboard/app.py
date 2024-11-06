@@ -9,6 +9,9 @@ import plotly.express as px
 from shinywidgets import render_plotly
 from scipy import stats
 from faicons import icon_svg
+from astral import LocationInfo
+from astral.sun import sun
+
 #import openmeteo_requests
 #import requests_cache
 #from retry_requests import retry
@@ -159,7 +162,7 @@ with ui.sidebar(open="open"):
     ui.h6("Links:"),
     ui.a("GitHub Source", href="https://github.com/drpafowler/cintel-05-cintel/tree/main", target="_blank",),
     ui.a("GitHub App", href="https://drpafowler.github.io/cintel-05-cintel/", target="_blank")
-    ui.a("OpenMeteo API", href="https://open-meteo.com/", target="_blank")
+    ui.a("Palmer Station Webcam", href="https://www.usap.gov/videoclipsandmaps/palwebcam.cfm", target="_blank")
     ui.a("Palmer Station Historical Data", href="https://portal.edirepository.org/nis/mapbrowse?scope=knb-lter-pal&identifier=189", target="_blank",)
 
 # In Shiny Express, everything not in the sidebar is in the main panel
@@ -203,7 +206,29 @@ with ui.layout_columns():
             # Adjust for Palmer Station timezone (UTC-3)
             palmer_time = utc_time.replace(hour=(utc_time.hour - 3) % 24)
             return palmer_time.strftime("%Y-%m-%d %H:%M:%S")
+    with ui.value_box(showcase=icon_svg("sun"), theme="bg-gradient-blue-purple"):
+        "Sunrise Time at Palmer Station"
 
+        @render.text
+        def display_sunrise():
+            """Calculate and return the sunrise time for Palmer Station, Antarctica"""
+            city = LocationInfo("Palmer Station", "Antarctica", "Antarctica/Palmer", -64.77, -64.05)
+            s = sun(city.observer, date=datetime.now())
+            sunrise_time = s['sunrise']
+            # Adjust for Palmer Station timezone (UTC-3)
+            palmer_sunrise_time = sunrise_time.replace(hour=(sunrise_time.hour - 3) % 24)
+            return palmer_sunrise_time.strftime("%Y-%m-%d %H:%M:%S")
+    with ui.value_box(showcase=icon_svg("moon"), theme="bg-gradient-blue-purple"):
+        "Sunset Time at Palmer Station"        
+        @render.text
+        def display_sunset():
+            """Calculate and return the sunset time for Palmer Station, Antarctica"""
+            city = LocationInfo("Palmer Station", "Antarctica", "Antarctica/Palmer", -64.77, -64.05)
+            s = sun(city.observer, date=datetime.now())
+            sunset_time = s['sunset']
+            # Adjust for Palmer Station timezone (UTC-3)
+            palmer_sunset_time = sunset_time.replace(hour=(sunset_time.hour - 3) % 24)
+            return palmer_sunset_time.strftime("%Y-%m-%d %H:%M:%S")
 
 with ui.card(full_screen=True):
     ui.card_header("Data Table")

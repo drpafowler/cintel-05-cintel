@@ -8,3 +8,4 @@ shinywidgets
 matplotlib
 seaborn
 plotly
+astral
